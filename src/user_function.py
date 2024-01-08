@@ -20,7 +20,7 @@ def save_data(
     # data.to_excel(path_dir + xls_file)
 
 
-# epsg: 4326
+# General functions
 def getFeatures(gdf: gpd.GeoDataFrame):
     """
     The function `getFeatures` takes a GeoDataFrame and returns a list of features in a format that is
@@ -68,6 +68,7 @@ def points_inside(df: pd.DataFrame, shapefile) -> gpd.GeoDataFrame:
     return points_inside
 
 
+# epsg: 4326
 def simple_metrics(
     df: gpd.GeoDataFrame,
     target_name: str,
@@ -106,3 +107,75 @@ def get_metrics(
         )
         collect_data = pd.concat((collect_data, stats))
     return collect_data
+
+
+# mollwide
+
+
+def lat_to_moll(shp_file: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    return shp_file.to_crs(epsg=9001)
+
+
+def get_info_settlement(
+    main_table: pd.DataFrame,
+    prefix: str = "dummy_settl_",
+    col_z="z",
+    name_c="value",
+    id_cols: list[str] = ["index", "id_distr_b", "year", "newid", "baseline_P"],
+    row_info=None,
+):
+    left_df = main_table[id_cols].iloc[:1]
+    if row_info is not None:
+        left_df = row_info
+    info = (
+        main_table.groupby(col_z).size().div(len(main_table)).reset_index(name=name_c)
+    )
+    info["z"] = prefix + info["z"].astype(str)
+    right_df = pd.pivot_table(
+        info, values="value", columns="z", aggfunc=np.sum, fill_value=0
+    )
+
+    all = pd.concat([left_df, right_df], ignore_index=True)
+    return all.ffill().bfill().head(1)
+
+
+def get_metrics_setl(
+    raster_path: str,
+    data_shp: gpd.GeoDataFrame,
+    prefix_name: str = ["dummy_settl_", "dummy_settle_without_na_"],
+    col_z: str = "z",
+    cols: list[str] = ["index", "id_distr_b", "year", "newid", "baseline_P"],
+    new_columns={"id_distr_b": "id_distr_bank", "baseline_P": "baseline_PSU"},
+) -> pd.DataFrame:
+    with_nas = pd.DataFrame()
+    without_nas = pd.DataFrame()
+    data_shp = data_shp.to_crs(epsg=9001)
+    for i in range(len(data_shp)):
+        row = data_shp.iloc[i : i + 1]
+
+        row_info = row[cols].head(1)
+
+        df = crop_raster(raster_path, row)
+        df = points_inside(df, row)
+        with_na = get_info_settlement(
+            df,
+            prefix=prefix_name[0],
+            col_z=col_z,
+            name_c="value",
+            id_cols=cols,
+            row_info=row_info,
+        )
+        without_na = get_info_settlement(
+            df.query("z > 0"),
+            prefix=prefix_name[1],
+            col_z=col_z,
+            name_c="value",
+            id_cols=cols,
+            row_info=row_info,
+        )
+
+        with_nas = pd.concat((with_nas, with_na))
+        without_nas = pd.concat((without_nas, without_na))
+    with_nas = with_nas.fillna(value=0).rename(columns=new_columns)
+    without_nas = without_nas.fillna(value=0).rename(columns=new_columns)
+    return with_nas, without_nas
