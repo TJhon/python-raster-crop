@@ -12,6 +12,8 @@ rasterio = "*"
 shapely = "*"
 matplotlib = "*"
 earthpy = "*"
+pycrs = "*"
+tqdm = "*"
 
 [dev-packages]
 
