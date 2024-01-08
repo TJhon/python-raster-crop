@@ -8,6 +8,10 @@ pandas = "*"
 numpy = "*"
 geopandas = "*"
 ipykernel = "*"
+rasterio = "*"
+shapely = "*"
+matplotlib = "*"
+earthpy = "*"
 
 [dev-packages]
 
