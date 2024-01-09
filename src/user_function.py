@@ -60,11 +60,14 @@ def crop_raster(raster_path: str, shapefile: gpd.GeoDataFrame) -> pd.DataFrame:
     return df
 
 
-def points_inside(df: pd.DataFrame, shapefile) -> gpd.GeoDataFrame:
+def points_inside(df: pd.DataFrame, shapefile, not_null=10000000) -> gpd.GeoDataFrame:
+    df = df[abs(df["z"]) < not_null]
+    df = df[df["z"] > 0]
     points_df = gpd.GeoDataFrame(
         df, geometry=gpd.points_from_xy(df["x"], df["y"])
     ).set_crs(epsg=4326)
     points_inside = gpd.sjoin(points_df, shapefile, how="inner", op="within")
+
     return points_inside
 
 
@@ -75,9 +78,8 @@ def simple_metrics(
     ref: str = "z",
     cols: list[str] = ["index", "id_distr_b", "year", "newid", "baseline_P"],
     new_columns={"id_distr_b": "id_distr_bank", "baseline_P": "baseline_PSU"},
-    not_null=0,
 ) -> pd.DataFrame:
-    df = df.dropna(subset=[ref])
+    # df = df.dropna(subset=[ref])
     ref_df = df[cols].iloc[:1]
     stats = df[ref].agg([np.mean, np.std, np.sum]).values.flatten()
     (
@@ -85,7 +87,7 @@ def simple_metrics(
         ref_df[f"{target_name}_sd"],
         ref_df[f"{target_name}_sum"],
     ) = stats
-    ref_df = ref_df.replace([np.inf, -np.inf], not_null)
+    # ref_df = ref_df.replace([np.inf, -np.inf], not_null)
     return ref_df.rename(columns=new_columns)
 
 
