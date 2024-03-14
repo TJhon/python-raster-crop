@@ -1,0 +1,209 @@
+
+
+# Market Areas Indicators creations using Raster Data
+
+## Create market areas
+
+### How is it work?
+
+Tomando en cuenta el puento de referencia inicial (el centroide) del mercado, 
+se genera un mercado de radio `r` el cual se representa dentro de un cuadrado, 
+el cual tomando en cuenta el ancho del `grid` (en km) que se quiera calcular. 
+
+
+
+```{python}
+from_ = [53.550905, -113.268436]
+```
+
+
+```{python}
+import requests, pandas as pd, alphashape
+from tqdm import tqdm
+import geopandas as gpd, numpy as np
+from shapely.geometry import LineString, Point
+from shapely.geometry import Polygon
+import geopy.distance
+ecl_dist = geopy.distance.geodesic
+
+crs_moll='EPSG:3857'
+crs_lat='EPSG:4326'
+
+```
+
+
+Por ejemplo, si modificamos un poco el codigo de [`make_grid`](https://github.com/alexanderquispe/osrm_python/blob/main/osrmareas/areas.py)
+
+```{python}
+import matplotlib.pyplot as plt
+
+
+def destination(x, y, size_grid):
+    coords_pol = [
+        (x, y),
+        (x + size_grid, y),
+        (x + size_grid, y + size_grid),
+        (x, y + size_grid),
+    ]
+    center = size_grid / 2
+    coords_center = [x + center, y + center]
+    return coords_center
+
+
+def generate_grid(center_lat_long=from_, radius_km=5, grid_km_size=2.5):
+
+    n_grid = radius_km / grid_km_size * 2
+
+    center = list(reversed(center_lat_long))
+    radius_km = radius_km * 1000
+    initial_center = Point(center)
+
+    point_c = gpd.GeoSeries(initial_center, crs=crs_lat).to_crs(crs_moll)
+    point_center = point_c.buffer(radius_km, cap_style=3)
+
+    minX, minY, maxX, maxY = point_center.total_bounds
+    size_grid_km = (maxY - minY) / n_grid
+    cols_grid = list(np.arange(minX, maxX, size_grid_km))
+    rows_grid = list(np.arange(minY, maxY, size_grid_km))
+
+    x_destinations = []
+    y_destinations = []
+
+    plt.figure(figsize=(6, 6))
+
+    for x in cols_grid:
+        for y in rows_grid:
+            final = destination(x, y, size_grid_km)
+            x_destinations.append(final[0])
+            y_destinations.append(final[1])
+
+    ax = plt.gca()
+    point_c_moll = point_c.bounds[["minx", "miny"]].T.values
+
+    for i in range(len(cols_grid)):
+        plt.axhline(y=rows_grid[i])
+        plt.axvline(x=cols_grid[i])
+
+    plt.scatter(point_c_moll[0][0], point_c_moll[1][0], color="red", s=200)
+
+    plt.scatter(x_destinations, y_destinations)
+    plt.axis("off")
+
+    ax.set_xlim((minX, maxX))
+    ax.set_ylim((minY, maxY))
+    plt.show()
+
+    print(len(y_destinations))
+
+
+```
+
+
+
+
+para un mercado con un radio de 5km y 2.5km de ancho del grid entonces tendriamos 16 puntos de destinos finales
+
+
+```{python}
+generate_grid(radius_km=5, grid_km_size=2.5)
+```
+
+mientras que para un mercado con un radio de 5km y 1km de ancho del grid entonces tendriamos 100 puntos de destinos finales
+
+
+```{python}
+generate_grid(radius_km=5, grid_km_size=1)
+```
+
+y para 100 metros serian, con un radio de 1km tendriamos 400 destinos finales
+
+```{python}
+generate_grid(radius_km=1, grid_km_size=0.1)
+```
+
+
+### OSRM Directions API
+
+Para poder usar la libreria, previamente se debe tener el servidor corriendo, para poder las consultas a la API, para este caso en concreto se usara el pbf de Aleberta-Canada.
+
+
+
+```{python}
+# Download pbf file
+from osrmareas.downloader import GetPBF
+download = GetPBF()
+download.sub_region(['alberta']).get(save_dir='country_pbf')
+
+pbf_file = 'alberta-latest.osm' #{country, subregion}-latest.osm
+pbf_file_path = './country_pbf'
+
+from osrmareas.osrm import Server
+cnd_alb = Server(pbf_file, pbf_file_path)
+```
+
+```{python}
+# Generate the files
+cnd_alb.gen_osrm_1()
+cnd_alb.prepare_server_2()
+```
+
+```{python}
+# run the server localy
+cnd_alb.run_server()
+```
+
+
+Para ilustrar el grid anterior vamos a usar la coordenada inicial `from_` con una hacia `to_` y graficarlo despues, ya que la funcion `get_osrm_route` es el encargado de calcular la ruta y distancia tanto euclidianda como la distancia real manejando en este caso (para este caso se usa el parametro dentro de `Server` el parametro por defecto de `method_lua = "car"` para los casos de `method_lua = ['bike', 'foot']`, solo se debe modificar el parametro y recordar que osrm proporciona solo la informacion disponible para ese metodo, por lo que si no existe una ruta exclusivamente o que pueda ser utilizada por el metodo no generara la ruta ). Por ultimo, se debe notar que la representacion de la ruta esta en el formato de latitud y longitud.
+
+```{python}
+from osrmareas import areas
+from_ = [53.550905, -113.268436]
+to_ = [53.548449, -113.258648]
+rt = areas.get_osrm_route(from_, to_)
+rt
+```
+
+```{python}
+%%time
+rt.plot();
+```
+
+
+Tomando los ejemplos anteriores se tendra primero un radio de 5km y 2.5km de ancho de grid.
+
+
+```{python}
+from time import time
+tik = time()
+all_rt_1=areas.get_routes(from_, radius_km=5, grid_km_size= 2.5)
+all_rt_1.plot()
+
+
+```
+
+para un radio de 5km y un grid de 1km
+
+
+```{python}
+tik = time()
+all_rt_2=areas.get_routes(from_, radius_km=5, grid_km_size= 1)
+all_rt_2.plot()
+print(f"{time() - tik} - Seconds")
+```
+
+para un radio de 1km y 100 metros de ancho de grid
+
+```{python}
+tik = time()
+all_rt_3=areas.get_routes(from_, radius_km=1, grid_km_size= 0.1)
+all_rt_3.plot()
+print(f"{time() - tik} - Seconds")
+```
+
+
+
+### OSM vs Google Maps Api
+
+
+
+### 
