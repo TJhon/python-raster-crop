@@ -122,7 +122,7 @@ generate_grid(radius_km=1, grid_km_size=0.1)
 ```
 
 
-### OSRM Directions API
+### OSRM Directions API with [`osrm_python`](https://github.com/alexanderquispe/osrm_python/tree/main?tab=readme-ov-file#osrm-routes) package
 
 Para poder usar la libreria, previamente se debe tener el servidor corriendo, para poder las consultas a la API, para este caso en concreto se usara el pbf de Aleberta-Canada.
 
@@ -201,9 +201,31 @@ print(f"{time() - tik} - Seconds")
 ```
 
 
+Y por ultimo tenemos la opcion de poder extraer solo las rutas que estan dentro de una distancia en km en especifico y poder generar el shapefile real que representa un mercado desde el `centrodie` de un radio en km especifico.
+
+```{python}
+tik = time()
+all_rt_3=areas.get_routes(from_, radius_km=20, grid_km_size= 1)
+print(f"{time() - tik} - Seconds")
+```
+
+```{python}
+ameba = areas.get_ameba(all_rt_3, max_km = 12, alpha = 80, km_col='dist_driving_km')
+ameba.plot()
+```
+
+
 
 ### OSM vs Google Maps Api
 
 
+Primero contextualicemos nuestro caso, aproximadamente tenemos cerca de 250 mercados, cada mercado tiene un radio de media 10km, y el ancho de busqueda de destino final son de 100 metros de ancho del grid, por lo tanto son 4000 destino de busqueda. Es decir que tendriamos que 4000 multiplicado por 250 mercados, en total 1000000.
 
-### 
+Al usar la API de google tenemos varias opciones para escoger pero para este caso el servicio necesario a contratar seria el [SKU: Router: Compute Routes - Basic](https://developers.google.com/maps/documentation/routes/usage-and-billing#routes-basic) el cual tiene un costo de 0.004 USD por peticion, lo que multiplicado por el 1M de peticiones que se tendria que hacer haria un total de 4000 USD.
+
+
+En conclusion, usar OSRM localmente implicaria casi un ahorro de 4000 USD, sin considerar el costo del equipo.
+
+# Generate indicators
+
+
