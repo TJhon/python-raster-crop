@@ -4,17 +4,10 @@
 
 ## Create market areas
 
-### How is it work?
+### How does it work?
 
-Tomando en cuenta el puento de referencia inicial (el centroide) del mercado, 
-se genera un mercado de radio `r` el cual se representa dentro de un cuadrado, 
-el cual tomando en cuenta el ancho del `grid` (en km) que se quiera calcular. 
+Considering the initial reference point (the centroid) of the market, a market with a radius `r` is generated, which is represented within a square, taking into account the width of the `grid` (in km) that you want to calculate.
 
-
-
-```{python}
-from_ = [53.550905, -113.268436]
-```
 
 
 ```{python}
@@ -24,6 +17,14 @@ import geopandas as gpd, numpy as np
 from shapely.geometry import LineString, Point
 from shapely.geometry import Polygon
 import geopy.distance
+import warnings 
+import pandas as pd, numpy as np
+import geopandas as gpd, rasterio as rio
+from rasterio.mask import mask
+
+
+warnings.filterwarnings('ignore')
+
 ecl_dist = geopy.distance.geodesic
 
 crs_moll='EPSG:3857'
@@ -31,8 +32,7 @@ crs_lat='EPSG:4326'
 
 ```
 
-
-Por ejemplo, si modificamos un poco el codigo de [`make_grid`](https://github.com/alexanderquispe/osrm_python/blob/main/osrmareas/areas.py)
+For example, if we slightly modify the code from [`make_grid`](https://github.com/alexanderquispe/osrm_python/blob/main/osrmareas/areas.py)
 
 ```{python}
 import matplotlib.pyplot as plt
@@ -49,8 +49,8 @@ def destination(x, y, size_grid):
     coords_center = [x + center, y + center]
     return coords_center
 
-
-def generate_grid(center_lat_long=from_, radius_km=5, grid_km_size=2.5):
+from_ =[24.933989, 67.107785]
+def generate_grid(center_lat_long = from_ , radius_km=5, grid_km_size=2.5):
 
     n_grid = radius_km / grid_km_size * 2
 
@@ -94,138 +94,381 @@ def generate_grid(center_lat_long=from_, radius_km=5, grid_km_size=2.5):
     plt.show()
 
     print(len(y_destinations))
-
-
 ```
 
+In the provided code snippets, the function `generate_grid` is called with different parameters to create grids for different market scenarios. Let's elaborate on each scenario:
 
-
-
-para un mercado con un radio de 5km y 2.5km de ancho del grid entonces tendriamos 16 puntos de destinos finales
-
-
+- For a market with a radius of 5km and a grid size of 2.5km:
+   
 ```{python}
 generate_grid(radius_km=5, grid_km_size=2.5)
 ```
 
-mientras que para un mercado con un radio de 5km y 1km de ancho del grid entonces tendriamos 100 puntos de destinos finales
+This function call generates a grid where each grid cell covers an area of 2.5km x 2.5km within the 5km radius of the market. With this configuration, there would be 16 final destination points.
 
+- For a market with a radius of 5km and a grid size of 1km:
 
 ```{python}
 generate_grid(radius_km=5, grid_km_size=1)
 ```
+In this scenario, each grid cell covers an area of 1km x 1km within the 5km radius. Consequently, there would be 100 final destination points.
 
-y para 100 metros serian, con un radio de 1km tendriamos 400 destinos finales
+- For a grid cell size of 100 meters and a market radius of 1km:
 
 ```{python}
 generate_grid(radius_km=1, grid_km_size=0.1)
 ```
 
+This call results in a grid where each grid cell covers an area of 100m x 100m within a 1km radius. Hence, there would be 400 final destination points.
 
-### OSRM Directions API with [`osrm_python`](https://github.com/alexanderquispe/osrm_python/tree/main?tab=readme-ov-file#osrm-routes) package
+These function calls demonstrate how adjusting the grid size affects the granularity of the grid and consequently the number of final destination points within a given market radius.
 
-Para poder usar la libreria, previamente se debe tener el servidor corriendo, para poder las consultas a la API, para este caso en concreto se usara el pbf de Aleberta-Canada.
+The provided code utilizes the OSRM Directions API through the `osrm_python` package to perform route calculations and visualize them. Let's break down the code and its functionalities:
 
+### Setting Up OSRM Directions API with [`osrm_python`](https://github.com/alexanderquispe/osrm_python/tree/main?tab=readme-ov-file#osrm-routes) package
 
+To use the library, you need to have the OSRM server running. For this specific case, a PBF file of Pakistan is used.
 
 ```{python}
-# Download pbf file
+# Download PBF file
 from osrmareas.downloader import GetPBF
 download = GetPBF()
-download.sub_region(['alberta']).get(save_dir='country_pbf')
+download.country(['pakistan']).get(save_dir='countr_pk')
 
-pbf_file = 'alberta-latest.osm' #{country, subregion}-latest.osm
-pbf_file_path = './country_pbf'
+pbf_file = 'pakistan-latest.osm' #{country, subregion}-latest.osm
+pbf_file_path = './countr_pk'
 
 from osrmareas.osrm import Server
-cnd_alb = Server(pbf_file, pbf_file_path)
+pk_server = Server(pbf_file, pbf_file_path)
 ```
+
+### Generating OSRM Files and Running the Server
+
+The following code generates the necessary files for OSRM and starts the local server.
 
 ```{python}
 # Generate the files
-cnd_alb.gen_osrm_1()
-cnd_alb.prepare_server_2()
+pk_server.gen_osrm_1()
+pk_server.prepare_server_2()
+
+# Run the server locally
+pk_server.run_server()
 ```
 
-```{python}
-# run the server localy
-cnd_alb.run_server()
-```
+### Calculating Routes and Visualizing
 
-
-Para ilustrar el grid anterior vamos a usar la coordenada inicial `from_` con una hacia `to_` y graficarlo despues, ya que la funcion `get_osrm_route` es el encargado de calcular la ruta y distancia tanto euclidianda como la distancia real manejando en este caso (para este caso se usa el parametro dentro de `Server` el parametro por defecto de `method_lua = "car"` para los casos de `method_lua = ['bike', 'foot']`, solo se debe modificar el parametro y recordar que osrm proporciona solo la informacion disponible para ese metodo, por lo que si no existe una ruta exclusivamente o que pueda ser utilizada por el metodo no generara la ruta ). Por ultimo, se debe notar que la representacion de la ruta esta en el formato de latitud y longitud.
+The code snippet below calculates a route from a starting point (`from_`) to an ending point (`to_`) and plots it on a map.
 
 ```{python}
 from osrmareas import areas
-from_ = [53.550905, -113.268436]
-to_ = [53.548449, -113.258648]
+from_ = [28.421612, 70.313059]
+to_ = [28.408835, 70.327077]
 rt = areas.get_osrm_route(from_, to_)
 rt
 ```
 
 ```{python}
-%%time
-rt.plot();
+rt.plot()
 ```
 
+### Illustrating Grid Routes
 
-Tomando los ejemplos anteriores se tendra primero un radio de 5km y 2.5km de ancho de grid.
+The subsequent code snippets demonstrate route calculations and visualizations for different grid configurations:
 
+1. Radius of 5km and grid size of 2.5km:
 
 ```{python}
-from time import time
-tik = time()
 all_rt_1=areas.get_routes(from_, radius_km=5, grid_km_size= 2.5)
 all_rt_1.plot()
-
-
 ```
 
-para un radio de 5km y un grid de 1km
-
+2. Radius of 5km and grid size of 1km:
 
 ```{python}
-tik = time()
 all_rt_2=areas.get_routes(from_, radius_km=5, grid_km_size= 1)
 all_rt_2.plot()
-print(f"{time() - tik} - Seconds")
 ```
 
-para un radio de 1km y 100 metros de ancho de grid
+3. Radius of 1km and grid size of 100 meters:
 
 ```{python}
-tik = time()
 all_rt_3=areas.get_routes(from_, radius_km=1, grid_km_size= 0.1)
 all_rt_3.plot()
-print(f"{time() - tik} - Seconds")
 ```
 
+### Extracting Routes within a Specific Distance
 
-Y por ultimo tenemos la opcion de poder extraer solo las rutas que estan dentro de una distancia en km en especifico y poder generar el shapefile real que representa un mercado desde el `centrodie` de un radio en km especifico.
+Lastly, the code snippet below extracts routes within a specified distance and generates a shapefile representing a market from the centroid of a specific radius.
 
 ```{python}
-tik = time()
 all_rt_3=areas.get_routes(from_, radius_km=20, grid_km_size= 1)
-print(f"{time() - tik} - Seconds")
-```
-
-```{python}
 ameba = areas.get_ameba(all_rt_3, max_km = 12, alpha = 80, km_col='dist_driving_km')
 ameba.plot()
 ```
 
+This code snippet demonstrates the capabilities of the `osrm_python` package for route calculation and visualization, particularly useful for market analysis and planning.
+
+### OSM vs Google Maps API
+
+Let's first provide some context for our case. We have approximately 250 markets, each with a radius of about 10km, and the width of the final destination search grid is 100 meters. This means we have 4000 search destinations per market. So, in total, we would have 4000 destinations multiplied by 250 markets, resulting in 1,000,000 destinations.
+
+When using the Google Maps API, we have several options to choose from. However, for this case, the required service to subscribe to would be the [SKU: Router: Compute Routes - Basic](https://developers.google.com/maps/documentation/routes/usage-and-billing#routes-basic), which costs 0.004 USD per request. Multiplying this cost by the 1M requests we would need to make would total 4000 USD.
+
+In conclusion, using OSRM locally would imply a savings of nearly 4000 USD, not considering the cost of the equipment.
+
+# Generate Indicators
+
+In this section, we'll outline the process of generating indicators using raster files and shapefiles. First, we'll need to download and prepare the necessary data. Let's break down the steps:
+
+```{python}
+# Download PBF file
+from osrmareas.downloader import GetPBF
+download = GetPBF()
+download.country(['pakistan']).get(save_dir='countr_pk')
+```
+
+```{python}
+# Set up paths and initialize the server
+pbf_file = "pakistan-latest.osm"  # {country, subregion}-latest.osm
+pbf_file_path = "./countr_pk"
+
+from osrmareas.osrm import Server
+
+pk_pbf = Server(pbf_file, pbf_file_path)
+pk_pbf.gen_osrm_1()
+pk_pbf.prepare_server_2()
+pk_pbf.run_server()
+```
+
+## Step by Step
+
+To obtain the metrics, we'll go through four steps. Firstly, we need to crop the raster file according to the shapefile, which represents the market area. This shapefile will be generated based on a centroid to encompass the entire market area. This cropping process ensures that we're extracting observations only from within the market area. Then, we generate the metrics. Since we assume we have a dataframe with data for multiple markets, the interaction must be performed for each market individually, followed by combining the rows of metrics.
+
+To illustrate these steps, we'll demonstrate for a single coordinate point and a single raster file.
 
 
-### OSM vs Google Maps Api
+```{python}
+from osrmareas import areas
+karachi_ll = [24.910871, 67.030846]
+karachi_df = areas.get_routes(karachi_ll, radius_km=30, grid_km_size=1)
+karachi_df_shp = areas.get_ameba(karachi_df, max_km = 30)
+karachi_df_shp.plot()
+```
+
+<!--  -->
+### Cropping the Raster
+
+In this section, we'll demonstrate how to crop a raster file using a shapefile representing the market area.
+
+```{python}
+raster_path = (
+    "../data/8_night_light/pk_night_light_harm.tiff"  # Path to the raster file
+)
+shapefile = karachi_df_shp  # Shapefile representing the market area
 
 
-Primero contextualicemos nuestro caso, aproximadamente tenemos cerca de 250 mercados, cada mercado tiene un radio de media 10km, y el ancho de busqueda de destino final son de 100 metros de ancho del grid, por lo tanto son 4000 destino de busqueda. Es decir que tendriamos que 4000 multiplicado por 250 mercados, en total 1000000.
+# Define a function to extract features compatible with rasterio
+def getFeatures(gdf: gpd.GeoDataFrame):
+    import json
 
-Al usar la API de google tenemos varias opciones para escoger pero para este caso el servicio necesario a contratar seria el [SKU: Router: Compute Routes - Basic](https://developers.google.com/maps/documentation/routes/usage-and-billing#routes-basic) el cual tiene un costo de 0.004 USD por peticion, lo que multiplicado por el 1M de peticiones que se tendria que hacer haria un total de 4000 USD.
-
-
-En conclusion, usar OSRM localmente implicaria casi un ahorro de 4000 USD, sin considerar el costo del equipo.
-
-# Generate indicators
+    return [json.loads(gdf.to_json())["features"][0]["geometry"]]
 
 
+# Crop the raster file using the shapefile
+with rio.open(raster_path) as src:
+    out_image, out_transform = mask(src, getFeatures(shapefile), crop=True)
+values = out_image.flatten()
+rows, cols = np.indices(out_image.shape[-2:])
+x, y = rio.transform.xy(out_transform, rows.flatten(), cols.flatten())
+
+# Create a DataFrame with values and coordinates
+data = {"x": x, "y": y, "z": values}
+df = pd.DataFrame(data)
+df
+```
+
+### Filtering Observations within the Shapefile
+
+Next, we'll filter the observations that fall within the boundaries of the shapefile.
+
+```{python}
+points_df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df["x"], df["y"])).set_crs(
+    epsg=4326
+)
+points_inside = gpd.sjoin(points_df, shapefile, how="inner", op="within")
+points_inside
+```
+
+Visualize to verify correspondence with the cropped shapefile.
+
+```{python}
+points_inside.plot()
+```
+
+### Metrics
+
+For this case, we'll compute metrics including mean, standard deviation, and sum.
+
+```{python}
+import numpy as np
+
+target_name = "nightlight"
+
+# Define the metrics
+metrics = [np.mean, np.std, np.sum]
+points_result = points_inside.dropna(subset=["z"])
+stats = points_result["z"].agg(metrics).values.flatten()
+
+# Assign computed metrics to the shapefile
+(
+    shapefile[f"{target_name}_mean"],
+    shapefile[f"{target_name}_sd"],
+    shapefile[f"{target_name}_sum"],
+) = stats
+shapefile
+```
+<!--  -->
+
+
+
+<!--  -->
+### Join All in a Function
+
+To ensure reusability, let's encapsulate the previous procedure into a function that ultimately returns a DataFrame containing the geometry of the shapefile along with its metrics.
+
+```{python}
+def metric_result(
+    centroid_from,
+    path_raster: str,
+    radius_km=4,
+    grid_km=1,
+    target_name="metrics",
+    metrics=[np.mean, np.std, np.sum],
+):
+    # Generate a shapefile
+    routes = areas.get_routes(centroid_from, radius_km=radius_km, grid_km_size=grid_km)
+    shapefile = areas.get_ameba(routes, max_km=radius_km)
+
+    # Crop the raster
+    with rio.open(path_raster) as src:
+        out_image, out_transform = mask(src, getFeatures(shapefile), crop=True)
+
+    values = out_image.flatten()
+    rows, cols = np.indices(out_image.shape[-2:])
+    x, y = rio.transform.xy(out_transform, rows.flatten(), cols.flatten())
+
+    data = {"x": x, "y": y, "z": values}
+    df = pd.DataFrame(data)
+
+    # Points inside
+    points_df = gpd.GeoDataFrame(
+        df, geometry=gpd.points_from_xy(df["x"], df["y"])
+    ).set_crs(epsg=4326)
+    points_inside = gpd.sjoin(points_df, shapefile, how="inner", op="within")
+
+    # Generate Metrics
+    points_result = points_inside.dropna(subset=["z"])
+    stats = points_result["z"].agg(metrics).values.flatten()
+
+    (
+        shapefile[f"{target_name}_mean"],
+        shapefile[f"{target_name}_sd"],
+        shapefile[f"{target_name}_sum"],
+    ) = stats
+
+    return shapefile
+```
+
+Now, let's test it with other coordinates.
+
+```{python}
+centroides_pk = [
+    [24.951004, 66.985305],
+    [24.910871, 67.030846],
+    [24.958856, 67.040013],
+    [24.933989, 67.107785],
+]
+
+metric_df = gpd.GeoDataFrame()
+for centroid in centroides_pk:
+    result = metric_result(centroid, path_raster=raster_path)
+    metric_df = pd.concat((metric_df, result))
+```
+
+```{python}
+metric_df.plot(column='metrics_mean')
+```
+
+In conclusion, to obtain metrics, you need the centroid coordinates, the path to the raster file, the radius of the raster file, the grid width explained in the first part, and lastly, a prefix name for the columns to facilitate merging multiple databases.
+<!--  -->
+
+
+
+<!--  -->
+## Other Metrics
+
+To streamline the process mentioned earlier, we can use a function that takes the aforementioned parameters as inputs.
+
+```{python}
+def metric_df_calculate(centroids, raster_path, **kwargs):
+    metric_df = gpd.GeoDataFrame()
+    for centroid in centroids:
+        result = metric_result(centroid, raster_path, **kwargs)
+        metric_df = pd.concat((metric_df, result))
+    return metric_df
+```
+
+### Nightlight
+
+#### Harm 
+
+Nightlight data can provide insights into urbanization and economic activity. Let's calculate metrics for the "Harm" version of nightlight data.
+
+```{python}
+r_path = "../data/8_night_light/pk_night_light_harm.tiff"
+name_col = "nightlight_harm"
+metric_df_calculate(centroides_pk, raster_path=r_path, target_name=name_col)
+```
+
+#### Original
+
+Now, let's compute metrics for the original nightlight data.
+
+```{python}
+r_path = '../data/8_night_light/pk_night_light.tiff'
+name_col = "nightlight"
+metric_df_calculate(centroides_pk, raster_path = r_path, target_name=name_col)
+```
+
+### Population
+
+Population density is a crucial indicator for various analyses. Let's calculate metrics based on population data.
+
+```{python}
+pop_tif = "../data/1_density/pak_ppp_2018_1km_Aggregated.tif"
+name_col = "population"
+metric_df_calculate(centroides_pk, pop_tif, target_name=name_col)
+```
+
+### Motor
+
+Friction surfaces, such as motorized friction, can indicate the ease of travel. Let's analyze motorized friction data.
+
+```{python}
+motor_tif = "../data/5_friction_surface/2020_motorized_friction_surface.geotiff"
+motor_name = "motor"
+metric_df_calculate(centroides_pk, motor_tif, target_name=motor_name)
+```
+
+### Altitude
+
+Altitude data provides valuable insights into terrain characteristics. Let's compute altitude metrics.
+
+```{python}
+srtm_tif = "../data/6_srtm/PK_srtm.tif"
+name_col = "altitude"
+metric_df_calculate(centroides_pk, srtm_tif, target_name=name_col)
+```
+
+These functions allow for efficient computation of various metrics, providing valuable information for spatial analysis and decision-making.
+<!--  -->
