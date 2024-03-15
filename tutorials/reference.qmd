@@ -468,7 +468,210 @@ Altitude data provides valuable insights into terrain characteristics. Let's com
 srtm_tif = "../data/6_srtm/PK_srtm.tif"
 name_col = "altitude"
 metric_df_calculate(centroides_pk, srtm_tif, target_name=name_col)
+
+# metric_df_areas.to_file("../sample_data/geometries.shp")
 ```
 
 These functions allow for efficient computation of various metrics, providing valuable information for spatial analysis and decision-making.
 <!--  -->
+
+
+## Plot Raster
+
+```{python}
+import geopandas as gpd, numpy as np
+import rasterio
+from rasterio.mask import mask
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+```
+
+### Altitude
+
+```{python}
+
+tiff_sample="../data/1_density/pak_ppp_2018_1km_Aggregated.tif"
+out_raster="../sample_data/out_raster/altitude.tif"
+title_raster="Altitude"
+t_label="M.A.S.L"
+map_color_hex=("#6B8FD1", "#2C816B", "#89720A")
+none_data=0
+shp_sample="../sample_data/geometries.shp"
+
+c1, c2, c3 = map_color_hex
+map_color = [(0.0, "white"), (0.1, c1), (0.5, c2), (1.0, c3)]
+cmap_vals = sorted(map_color, key=lambda x: x[0])  # Ordenar cmap_vals en orden ascendente
+
+gdf = gpd.read_file(shp_sample).iloc[1:2]
+
+with rasterio.open(tiff_sample) as src:
+    out_image, out_transform = mask(
+        src, gdf.geometry, crop=True, nodata=none_data, all_touched=True
+    )
+
+    # Obtener la transformación inversa para convertir las coordenadas de píxeles a coordenadas geográficas
+    out_meta = src.meta.copy()
+    out_meta.update(
+        {
+            "driver": "GTiff",
+            "height": out_image.shape[1],
+            "width": out_image.shape[2],
+            "transform": out_transform,
+        }
+    )
+    inv_transform = out_transform
+
+with rasterio.open(out_raster, "w", **out_meta) as dest:
+    dest.write(out_image)
+
+cmap = LinearSegmentedColormap.from_list("custom", cmap_vals)
+
+with rasterio.open(out_raster) as raster:
+    data = raster.read(1)
+    nodata_value = raster.nodata
+
+    data = np.where(data == nodata_value, np.nan, data)
+
+    # Transformar las coordenadas del raster a coordenadas geográficas
+    height, width = data.shape
+    xs = np.arange(0, width) * inv_transform.a + inv_transform.xoff
+    ys = np.arange(0, height) * inv_transform.e + inv_transform.yoff
+
+    plt.figure(figsize=(10, 10))
+    plt.imshow(data, extent=[xs[0], xs[-1], ys[-1], ys[0]], cmap=cmap)
+    plt.title(title_raster)
+    plt.colorbar(label=t_label)
+
+    # Plotear el shapefile
+    gdf.plot(ax=plt.gca(), edgecolor='red', facecolor='none')
+
+    plt.show()
+
+```
+
+
+
+```{python}
+# convert into a function
+def gen_plot(
+    tiff_sample="../data/1_density/pak_ppp_2018_1km_Aggregated.tif",
+    out_raster="../sample_data/out_raster/altitude.tif",
+    title_raster="Altitude",
+    t_label="M.A.S.L",
+    map_color_hex=("#6B8FD1", "#2C816B", "#89720A"),
+    none_data=0,
+    shp_sample="../sample_data/geometries.shp",
+):
+
+    c1, c2, c3 = map_color_hex
+    map_color = [(0.0, "white"), (0.1, c1), (0.5, c2), (1.0, c3)]
+    cmap_vals = sorted(map_color, key=lambda x: x[0])  # Ordenar cmap_vals en orden ascendente
+
+    gdf = gpd.read_file(shp_sample).iloc[1:2]
+
+    with rasterio.open(tiff_sample) as src:
+        out_image, out_transform = mask(
+            src, gdf.geometry, crop=True, nodata=none_data, all_touched=True
+        )
+
+        # Obtener la transformación inversa para convertir las coordenadas de píxeles a coordenadas geográficas
+        out_meta = src.meta.copy()
+        out_meta.update(
+            {
+                "driver": "GTiff",
+                "height": out_image.shape[1],
+                "width": out_image.shape[2],
+                "transform": out_transform,
+            }
+        )
+        inv_transform = out_transform
+
+    with rasterio.open(out_raster, "w", **out_meta) as dest:
+        dest.write(out_image)
+
+    cmap = LinearSegmentedColormap.from_list("custom", cmap_vals)
+
+    with rasterio.open(out_raster) as raster:
+        data = raster.read(1)
+        nodata_value = raster.nodata
+
+        data = np.where(data == nodata_value, np.nan, data)
+
+        # Transformar las coordenadas del raster a coordenadas geográficas
+        height, width = data.shape
+        xs = np.arange(0, width) * inv_transform.a + inv_transform.xoff
+        ys = np.arange(0, height) * inv_transform.e + inv_transform.yoff
+
+        plt.figure(figsize=(10, 10))
+        plt.imshow(data, extent=[xs[0], xs[-1], ys[-1], ys[0]], cmap=cmap)
+        plt.title(title_raster)
+        plt.colorbar(label=t_label)
+
+        # Plotear el shapefile
+        gdf.plot(ax=plt.gca(), edgecolor='red', facecolor='none')
+
+        plt.show()
+
+
+gen_plot()
+
+```
+
+### Motor Friction
+
+```{python}
+gen_plot(
+    tiff_sample="../data/5_friction_surface/2020_motorized_friction_surface.geotiff",
+    out_raster="../sample_data/out_raster/motor.tif",
+    title_raster="Friction Surface",
+    t_label="Friction",
+    map_color_hex=("#6B8FD1", "#2C816B", "#89720A"),
+    none_data=0,
+    shp_sample="../sample_data/geometries.shp",
+)
+```
+
+### Night Light 
+
+```{python}
+gen_plot(
+    tiff_sample="../data/8_night_light/pk_night_light.tiff",
+    out_raster="../sample_data/out_raster/night_light.tif",
+    title_raster="Night light",
+    t_label="Intensity",
+    map_color_hex=("#B4C1DA", "gray", "black"),
+    none_data=0,
+    shp_sample="../sample_data/geometries.shp",
+)
+```
+
+### Night Light - Harmonize
+
+```{python}
+gen_plot(
+    tiff_sample="../data/8_night_light/pk_night_light_harm.tiff",
+    out_raster="../sample_data/out_raster/night_light_harm.tif",
+    title_raster="Night light",
+    t_label="Intensity",
+    map_color_hex=("#B4C1DA", "gray", "black"),
+    none_data=0,
+    shp_sample="../sample_data/geometries.shp",
+)
+```
+
+
+### Population
+
+
+```{python}
+gen_plot(
+    tiff_sample="../data/1_density/pak_ppp_2018_1km_Aggregated.tif",
+    out_raster="../sample_data/out_raster/population.tif",
+    title_raster="Population",
+    t_label="Density",
+    map_color_hex=("#2C816B", "#1747A1", "#A30000"),
+    none_data=0,
+    shp_sample="../sample_data/geometries.shp",
+)
+```
+
