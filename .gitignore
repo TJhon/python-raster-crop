@@ -1,5 +1,5 @@
 data/*/*
-tut", torials/*/t
+tutorials/*/
 
 *pycache*
 .ipynb_checkpoints/
