@@ -482,7 +482,7 @@ These functions allow for efficient computation of various metrics, providing va
 import geopandas as gpd, numpy as np
 import rasterio
 from rasterio.mask import mask
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as pltsdfasasdfsdfasdf
 from matplotlib.colors import LinearSegmentedColormap
 ```
 
@@ -490,17 +490,19 @@ from matplotlib.colors import LinearSegmentedColormap
 
 ```{python}
 
-tiff_sample="../data/1_density/pak_ppp_2018_1km_Aggregated.tif"
-out_raster="../sample_data/out_raster/altitude.tif"
-title_raster="Altitude"
-t_label="M.A.S.L"
-map_color_hex=("#6B8FD1", "#2C816B", "#89720A")
-none_data=0
-shp_sample="../sample_data/geometries.shp"
+tiff_sample = "../data/1_density/pak_ppp_2018_1km_Aggregated.tif"
+out_raster = "../sample_data/out_raster/altitude.tif"
+title_raster = "Altitude"
+t_label = "M.A.S.L"
+map_color_hex = ("#6B8FD1", "#2C816B", "#89720A")
+none_data = 0
+shp_sample = "../sample_data/geometries.shp"
 
 c1, c2, c3 = map_color_hex
 map_color = [(0.0, "white"), (0.1, c1), (0.5, c2), (1.0, c3)]
-cmap_vals = sorted(map_color, key=lambda x: x[0])  # Ordenar cmap_vals en orden ascendente
+cmap_vals = sorted(
+    map_color, key=lambda x: x[0]
+)  # Ordenar cmap_vals en orden ascendente
 
 gdf = gpd.read_file(shp_sample).iloc[1:2]
 
@@ -543,7 +545,7 @@ with rasterio.open(out_raster) as raster:
     plt.colorbar(label=t_label)
 
     # Plotear el shapefile
-    gdf.plot(ax=plt.gca(), edgecolor='red', facecolor='none')
+    gdf.plot(ax=plt.gca(), edgecolor="red", facecolor="none")
 
     plt.show()
 
